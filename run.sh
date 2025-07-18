@@ -9,6 +9,9 @@ echo "Instalando paquetes Python necesarios..."
 pip3 install --upgrade --break-system-packages pip
 pip3 install --break-system-packages websockets pyautogui rpi.gpio
 
+echo "Instalando Xvfb para display virtual..."
+sudo apt install -y xvfb
+
 echo "Habilitando y arrancando servicio mDNS (Avahi)..."
 sudo systemctl enable avahi-daemon
 sudo systemctl start avahi-daemon
@@ -34,12 +37,14 @@ After=network.target
 
 [Service]
 Type=simple
-User=pi
-Group=pi
+User=p0yo7
+Group=p0yo7
 WorkingDirectory=$HOME/serve-and-ate
+ExecStartPre=/usr/bin/Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset
 ExecStart=/usr/bin/python3 $HOME/serve-and-ate/server.py
 Restart=always
 RestartSec=10
+Environment=DISPLAY=:99
 Environment=PYTHONPATH=$HOME/serve-and-ate
 
 [Install]
