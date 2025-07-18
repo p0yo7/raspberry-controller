@@ -1,0 +1,13 @@
+[Unit]
+Description=Servidor WebSocket y HTTP para Raspberry Pi (Serve-and-Ate)
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/pi/serve-and-ate/server.py
+WorkingDirectory=/home/pi/serve-and-ate
+Restart=always
+User=pi
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
