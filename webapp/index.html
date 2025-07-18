@@ -1,202 +1,48 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control Raspberry Pi</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍓</text></svg>">
+  <meta charset="UTF-8" />
+  <title>Serve and Ate - Trackpad & Teclado</title>
+  <style>
+    body {
+      margin: 0; font-family: sans-serif; text-align: center;
+    }
+    #trackpad {
+      width: 100vw;
+      height: 60vh;
+      background: #ddd;
+      touch-action: none;
+      user-select: none;
+      position: relative;
+    }
+    #keyboard {
+      width: 100vw;
+      height: 20vh;
+      font-size: 24px;
+    }
+    #buttons {
+      margin: 10px 0;
+    }
+    button {
+      font-size: 18px;
+      margin: 0 10px;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🍓 Control Raspberry Pi</h1>
-            <p class="subtitle">Control remoto vía WebSocket</p>
-        </header>
-        
-        <div class="connection-panel">
-            <div class="connection-status disconnected" id="connection-status">
-                <span class="status-icon">🔴</span>
-                <span class="status-text">Desconectado</span>
-            </div>
-            
-            <div class="connection-controls">
-                <div class="input-group">
-                    <input type="text" id="raspberry-host" placeholder="Hostname o IP (ej: raspi-control.local)" value="raspi-control.local">
-                    <button class="button button-primary" onclick="connect()">
-                        <span class="button-icon">🔗</span>
-                        Conectar
-                    </button>
-                    <button class="button button-danger" onclick="disconnect()">
-                        <span class="button-icon">🔌</span>
-                        Desconectar
-                    </button>
-                </div>
-                
-                <div class="quick-actions">
-                    <button class="button button-info" onclick="autoDetect()">
-                        <span class="button-icon">🔍</span>
-                        Auto-detectar
-                    </button>
-                    <button class="button button-warning" onclick="saveHost()">
-                        <span class="button-icon">💾</span>
-                        Guardar
-                    </button>
-                    <button class="button button-success" onclick="sendCommand('ping', [])">
-                        <span class="button-icon">📡</span>
-                        Ping
-                    </button>
-                </div>
-            </div>
-        </div>
-        
-        <div class="controls-container">
-            <div class="control-section">
-                <h2>🔌 Control GPIO</h2>
-                <div class="gpio-panel">
-                    <div class="gpio-input">
-                        <label for="gpio-pin">Pin GPIO:</label>
-                        <input type="number" id="gpio-pin" value="18" min="1" max="40">
-                    </div>
-                    <div class="gpio-buttons">
-                        <button class="button button-success" onclick="sendGPIOCommand('gpio_on')">
-                            <span class="button-icon">🟢</span>
-                            Encender
-                        </button>
-                        <button class="button button-danger" onclick="sendGPIOCommand('gpio_off')">
-                            <span class="button-icon">🔴</span>
-                            Apagar
-                        </button>
-                        <button class="button button-warning" onclick="sendGPIOCommand('gpio_toggle')">
-                            <span class="button-icon">🔄</span>
-                            Cambiar
-                        </button>
-                        <button class="button button-info" onclick="sendGPIOCommand('gpio_read')">
-                            <span class="button-icon">📖</span>
-                            Leer
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="control-section">
-                <h2>🎮 LEDs Predefinidos</h2>
-                <div class="led-grid">
-                    <button class="led-button led-green" onclick="sendCommand('gpio_on', [18])">
-                        <span class="led-icon">🟢</span>
-                        LED Verde (Pin 18)
-                    </button>
-                    <button class="led-button led-red" onclick="sendCommand('gpio_on', [19])">
-                        <span class="led-icon">🔴</span>
-                        LED Rojo (Pin 19)
-                    </button>
-                    <button class="led-button led-blue" onclick="sendCommand('gpio_on', [20])">
-                        <span class="led-icon">🔵</span>
-                        LED Azul (Pin 20)
-                    </button>
-                    <button class="led-button led-off" onclick="sendCommand('gpio_off', [18, 19, 20])">
-                        <span class="led-icon">⚫</span>
-                        Apagar Todos
-                    </button>
-                </div>
-            </div>
-            
-            <div class="control-section">
-                <h2>📊 Información del Sistema</h2>
-                <div class="system-grid">
-                    <button class="button button-info" onclick="sendCommand('system_info', [])">
-                        <span class="button-icon">🖥️</span>
-                        Info Sistema
-                    </button>
-                    <button class="button button-warning" onclick="sendCommand('get_temperature', [])">
-                        <span class="button-icon">🌡️</span>
-                        Temperatura
-                    </button>
-                    <button class="button button-success" onclick="sendCommand('get_memory', [])">
-                        <span class="button-icon">💾</span>
-                        Memoria
-                    </button>
-                    <button class="button button-primary" onclick="sendCommand('get_disk_usage', [])">
-                        <span class="button-icon">💿</span>
-                        Disco
-                    </button>
-                    <button class="button button-secondary" onclick="sendCommand('list_processes', [])">
-                        <span class="button-icon">⚙️</span>
-                        Procesos
-                    </button>
-                </div>
-            </div>
-            
-            <div class="control-section">
-                <h2>📜 Scripts Personalizados</h2>
-                <div class="script-panel">
-                    <div class="script-input">
-                        <input type="text" id="script-name" placeholder="Nombre del script (ej: led_blink.py)">
-                        <button class="button button-primary" onclick="runScript()">
-                            <span class="button-icon">▶️</span>
-                            Ejecutar
-                        </button>
-                    </div>
-                    <div class="script-presets">
-                        <button class="button button-success" onclick="sendCommand('run_script', ['led_blink.py'])">
-                            <span class="button-icon">✨</span>
-                            Parpadear LEDs
-                        </button>
-                        <button class="button button-info" onclick="sendCommand('run_script', ['sensor_read.py'])">
-                            <span class="button-icon">📡</span>
-                            Leer Sensores
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="control-section">
-                <h2>⚡ Sistema</h2>
-                <div class="system-controls">
-                    <button class="button button-warning" onclick="confirmAction('reboot')">
-                        <span class="button-icon">🔄</span>
-                        Reiniciar
-                    </button>
-                    <button class="button button-danger" onclick="confirmAction('shutdown')">
-                        <span class="button-icon">⏻</span>
-                        Apagar
-                    </button>
-                </div>
-            </div>
-            
-            <div class="control-section">
-                <h2>⌨️ Comando Personalizado</h2>
-                <div class="custom-panel">
-                    <div class="custom-inputs">
-                        <input type="text" id="custom-command" placeholder="Comando (ej: gpio_on)">
-                        <input type="text" id="custom-params" placeholder="Parámetros (ej: 18,19)">
-                        <button class="button button-primary" onclick="sendCustomCommand()">
-                            <span class="button-icon">🚀</span>
-                            Ejecutar
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="status-panel">
-            <div class="status-header">
-                <h2>📺 Estado y Respuestas</h2>
-                <button class="button button-small" onclick="clearStatus()">
-                    <span class="button-icon">🗑️</span>
-                    Limpiar
-                </button>
-            </div>
-            <div class="status-content" id="status">
-Esperando conexión...
-            </div>
-        </div>
-    </div>
-    
-    <footer>
-        <p>🍓 Raspberry Pi Control Panel | WebSocket: <span id="websocket-url">No conectado</span></p>
-    </footer>
-    
-    <script src="script.js"></script>
+  <h2>Control Remoto - Trackpad y Teclado</h2>
+  <div id="trackpad">Usa esta área como trackpad</div>
+  <div id="buttons">
+    <button id="right-click-btn">Clic Derecho</button>
+  </div>
+  <input
+    id="keyboard"
+    type="text"
+    placeholder="Escribe aquí y presiona teclas"
+    autofocus
+  />
+  <script src="script.js"></script>
 </body>
 </html>

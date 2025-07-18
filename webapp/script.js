@@ -1,99 +1,83 @@
-let ws = null;
+const ws = new WebSocket("ws://" + location.hostname + ":8765");
 
-function connect() {
-    const host = document.getElementById("raspberry-host").value || "raspi-control.local";
-    const url = `ws://${host}:8765`;
-    ws = new WebSocket(url);
+ws.onopen = () => console.log("WebSocket conectado");
+ws.onclose = () => console.log("WebSocket cerrado");
 
-    ws.onopen = () => {
-        updateConnectionStatus(true);
-        document.getElementById("websocket-url").textContent = url;
-        logStatus("✅ Conectado al servidor");
-    };
+const trackpad = document.getElementById("trackpad");
+let lastX = null,
+  lastY = null;
 
-    ws.onclose = () => {
-        updateConnectionStatus(false);
-        document.getElementById("websocket-url").textContent = "No conectado";
-        logStatus("🔌 Conexión cerrada");
-    };
+let lastTap = 0;
 
-    ws.onerror = (e) => {
-        logStatus("❌ Error en conexión WebSocket");
-    };
+trackpad.addEventListener("touchstart", (e) => {
+  if (e.touches.length === 1) {
+    // Un dedo: trackpad movimiento y doble tap
+    const t = e.touches[0];
+    lastX = t.clientX;
+    lastY = t.clientY;
 
-    ws.onmessage = (event) => {
-        logStatus(`📩 Respuesta:\n${event.data}`);
-    };
-}
-
-function disconnect() {
-    if (ws) ws.close();
-}
-
-function sendCommand(command, params = []) {
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-        logStatus("⚠️ WebSocket no conectado");
-        return;
+    const currentTime = new Date().getTime();
+    const tapLength = currentTime - lastTap;
+    if (tapLength < 300 && tapLength > 0) {
+      // Doble tap detectado: clic izquierdo
+      ws.send(JSON.stringify({ type: "click", button: "left" }));
+      e.preventDefault();
     }
-    const msg = JSON.stringify({ command, params });
-    ws.send(msg);
-    logStatus(`➡️ Enviado: ${msg}`);
-}
+    lastTap = currentTime;
+  }
+});
 
-function sendGPIOCommand(cmd) {
-    const pin = parseInt(document.getElementById("gpio-pin").value);
-    sendCommand(cmd, [pin]);
-}
+trackpad.addEventListener("touchmove", (e) => {
+  if (e.touches.length === 1) {
+    e.preventDefault(); // Evita scroll
 
-function sendCustomCommand() {
-    const cmd = document.getElementById("custom-command").value;
-    const paramStr = document.getElementById("custom-params").value;
-    const params = paramStr.split(',').map(x => isNaN(x) ? x : parseInt(x));
-    sendCommand(cmd, params);
-}
+    const t = e.touches[0];
+    const dx = t.clientX - lastX;
+    const dy = t.clientY - lastY;
+    lastX = t.clientX;
+    lastY = t.clientY;
 
-function runScript() {
-    const script = document.getElementById("script-name").value;
-    if (script.trim()) sendCommand("run_script", [script.trim()]);
-}
+    ws.send(
+      JSON.stringify({
+        type: "mouse",
+        dx: dx,
+        dy: dy,
+      })
+    );
+  } else if (e.touches.length === 2) {
+    // Scroll vertical con dos dedos
+    e.preventDefault();
 
-function autoDetect() {
-    alert("Auto-detección no implementada todavía.");
-}
+    const t1 = e.touches[0];
+    const t2 = e.touches[1];
 
-function saveHost() {
-    const host = document.getElementById("raspberry-host").value;
-    localStorage.setItem("raspberry-host", host);
-    alert("Host guardado.");
-}
-
-function confirmAction(action) {
-    if (confirm(`¿Seguro que quieres ejecutar ${action}?`)) {
-        sendCommand(action, []);
+    const currentY = (t1.clientY + t2.clientY) / 2;
+    if (trackpad.lastScrollY !== undefined) {
+      const dy = trackpad.lastScrollY - currentY;
+      ws.send(JSON.stringify({ type: "scroll", dy: dy * 10 })); // Multiplica para que sea más sensible
     }
-}
+    trackpad.lastScrollY = currentY;
+  }
+});
 
-function updateConnectionStatus(connected) {
-    const el = document.getElementById("connection-status");
-    el.className = connected ? "connection-status connected" : "connection-status disconnected";
-    el.querySelector(".status-icon").textContent = connected ? "🟢" : "🔴";
-    el.querySelector(".status-text").textContent = connected ? "Conectado" : "Desconectado";
-}
+trackpad.addEventListener("touchend", (e) => {
+  if (e.touches.length < 2) {
+    trackpad.lastScrollY = undefined;
+  }
+  if (e.touches.length === 0) {
+    lastX = null;
+    lastY = null;
+  }
+});
 
-function logStatus(text) {
-    const el = document.getElementById("status");
-    el.textContent += `\n${text}`;
-    el.scrollTop = el.scrollHeight;
-}
+const keyboard = document.getElementById("keyboard");
 
-function clearStatus() {
-    document.getElementById("status").textContent = "";
-}
+keyboard.addEventListener("keydown", (e) => {
+  ws.send(JSON.stringify({ type: "key", key: e.key }));
+});
 
-// Cargar host guardado
-window.onload = () => {
-    const savedHost = localStorage.getItem("raspberry-host");
-    if (savedHost) {
-        document.getElementById("raspberry-host").value = savedHost;
-    }
-};
+// Botón clic derecho
+const rightClickBtn = document.getElementById("right-click-btn");
+rightClickBtn.addEventListener("click", () => {
+  ws.send(JSON.stringify({ type: "click", button: "right" }));
+});

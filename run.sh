@@ -1,54 +1,52 @@
 #!/bin/bash
 set -e
 
-echo "Instalando dependencias..."
+echo "Actualizando repositorios e instalando dependencias..."
 sudo apt update
-sudo apt install -y python3-pip python3-dev build-essential wiringpi \
-    nginx avahi-daemon
+sudo apt install -y python3-pip python3-dev build-essential wiringpi avahi-daemon
 
-echo "Instalando paquetes de Python..."
-pip3 install websockets
+echo "Instalando paquetes Python necesarios..."
+pip3 install --upgrade pip
+pip3 install websockets pyautogui
 
-echo "Habilitando mDNS (Avahi)..."
+echo "Habilitando y arrancando servicio mDNS (Avahi)..."
 sudo systemctl enable avahi-daemon
 sudo systemctl start avahi-daemon
 
-echo "Configurando estructura de archivos..."
-mkdir -p /home/pi/scripts
+echo "Creando estructura de carpetas..."
 mkdir -p /home/pi/serve-and-ate/webapp
+mkdir -p /home/pi/serve-and-ate/scripts
 
+echo "Copiando archivos al directorio /home/pi/serve-and-ate/ ..."
 cp server.py /home/pi/serve-and-ate/
-cp styles.css /home/pi/serve-and-ate/webapp/
-cp script.js /home/pi/serve-and-ate/webapp/
 cp index.html /home/pi/serve-and-ate/webapp/
+cp script.js /home/pi/serve-and-ate/webapp/
 
-echo "Permisos para scripts..."
+echo "Asignando permisos de ejecución a server.py..."
 chmod +x /home/pi/serve-and-ate/server.py
 
 echo "Creando servicio systemd..."
-SERVICE_PATH="/etc/systemd/system/serve-and-ate.service"
-sudo tee "$SERVICE_PATH" > /dev/null <<EOF
+
+cat << EOF | sudo tee /etc/systemd/system/serve-and-ate.service
 [Unit]
-Description=Servidor WebSocket y HTTP para Raspberry Pi (Serve-and-Ate)
+Description=Serve and Ate Raspberry Pi Remote Control Server
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 /home/pi/serve-and-ate/server.py
-WorkingDirectory=/home/pi/serve-and-ate
-Restart=always
 User=pi
-Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=/home/pi/serve-and-ate
+ExecStart=/usr/bin/python3 /home/pi/serve-and-ate/server.py
+Restart=always
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-echo "Recargando daemon y habilitando servicio..."
+echo "Recargando systemd, habilitando y arrancando el servicio..."
 sudo systemctl daemon-reload
-sudo systemctl enable serve-and-ate
-sudo systemctl restart serve-and-ate
+sudo systemctl enable serve-and-ate.service
+sudo systemctl start serve-and-ate.service
 
-echo "Servicio iniciado correctamente. Verifica con:"
-echo "   sudo systemctl status serve-and-ate"
-
-echo "Accede desde tu navegador a: http://serve-and-ate.local:8080"
+echo "Instalación y configuración completa!"
+echo "Accede a http://serve-and-ate.local:8080 desde tu celular para controlar tu Raspberry Pi."
