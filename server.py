@@ -69,6 +69,7 @@ async def main():
     async with websockets.serve(handle_client, "0.0.0.0", 8765):
         print("WebSocket escuchando en puerto 8765...")
         print("Accede a http://[IP_DE_TU_PI]:8080 desde tu celular")
+        print("Accede desde http://[IP_DE_TU_PI]:8765 para WebSocket")
         await asyncio.Future()  # Ejecutar indefinidamente
 
 if __name__ == "__main__":
