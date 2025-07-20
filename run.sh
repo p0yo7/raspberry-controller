@@ -3,22 +3,15 @@ set -e
 
 echo "Actualizando repositorios e instalando dependencias..."
 sudo apt update
-sudo apt install -y python3-pip python3-dev build-essential python3-venv avahi-daemon xvfb
+sudo apt install -y build-essential pkg-config libx11-dev libxtst-dev libevdev-dev avahi-daemon xvfb curl
 
-# Ruta del proyecto
-APP_DIR="$HOME/serve-and-ate"
-VENV_DIR="$APP_DIR/venv"
-
-echo "Creando estructura de carpetas..."
-mkdir -p "$APP_DIR/webapp"
-mkdir -p "$APP_DIR/scripts"
-
-echo "Creando entorno virtual en $VENV_DIR..."
-python3 -m venv "$VENV_DIR"
-
-echo "Activando entorno virtual e instalando paquetes Python necesarios..."
-"$VENV_DIR/bin/pip" install --upgrade pip
-"$VENV_DIR/bin/pip" install websockets pyautogui rpi.gpio
+echo "Instalando Rust..."
+if ! command -v rustc &> /dev/null; then
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    source ~/.cargo/env
+else
+    echo "Rust ya está instalado"
+fi
 
 echo "Habilitando y arrancando servicio mDNS (Avahi)..."
 sudo systemctl enable avahi-daemon
@@ -42,43 +35,52 @@ EOF
 echo "Reiniciando servicio Avahi para aplicar configuración..."
 sudo systemctl restart avahi-daemon
 
-echo "Copiando archivos al directorio $APP_DIR ..."
-cp server.py "$APP_DIR/"
-cp ./webapp/index.html "$APP_DIR/webapp/"
-cp ./webapp/script.js "$APP_DIR/webapp/"
-cp ./webapp/styles.css "$APP_DIR/webapp/"
+echo "Creando estructura de carpetas..."
+mkdir -p ~/serve-and-ate-rust/webapp
+mkdir -p ~/serve-and-ate-rust/src
 
-echo "Asignando permisos de ejecución a server.py..."
-chmod +x "$APP_DIR/server.py"
+echo "Copiando archivos al directorio ~/serve-and-ate-rust/ ..."
+cp Cargo.toml ~/serve-and-ate-rust/
+cp src/main.rs ~/serve-and-ate-rust/src/
+cp ./webapp/index.html ~/serve-and-ate-rust/webapp/
+cp ./webapp/script.js ~/serve-and-ate-rust/webapp/
+cp ./webapp/styles.css ~/serve-and-ate-rust/webapp/
+
+echo "Navegando al directorio del proyecto y compilando..."
+cd ~/serve-and-ate-rust
+source ~/.cargo/env
+cargo build --release
 
 echo "Creando servicio systemd..."
-
-cat << EOF | sudo tee /etc/systemd/system/serve-and-ate.service
+cat << EOF | sudo tee /etc/systemd/system/serve-and-ate-rust.service
 [Unit]
-Description=Serve and Ate Raspberry Pi Remote Control Server
+Description=Serve and Ate Rust Remote Control Server
 After=network.target
+
 [Service]
 Type=simple
 User=$USER
 Group=$USER
-WorkingDirectory=$APP_DIR
+WorkingDirectory=$HOME/serve-and-ate-rust
 ExecStartPre=/usr/bin/Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset
-ExecStart=$VENV_DIR/bin/python $APP_DIR/server.py
+ExecStart=$HOME/serve-and-ate-rust/target/release/serve-and-ate-rust
 Restart=always
 RestartSec=10
 Environment=DISPLAY=:99
-Environment=PYTHONPATH=$APP_DIR
+Environment=RUST_LOG=info
+
 [Install]
 WantedBy=multi-user.target
 EOF
 
 echo "Recargando systemd, habilitando y arrancando el servicio..."
 sudo systemctl daemon-reload
-sudo systemctl enable serve-and-ate.service
-sudo systemctl start serve-and-ate.service
+sudo systemctl enable serve-and-ate-rust.service
+sudo systemctl start serve-and-ate-rust.service
 
 echo "Instalación y configuración completa!"
 echo "Accede a http://serve-and-ate.local:8080 desde tu celular para controlar tu Raspberry Pi."
 
+# Mostrar estado del servicio
 echo "Estado del servicio:"
-sudo systemctl status serve-and-ate.service --no-pager
+sudo systemctl status serve-and-ate-rust.service --no-pager
