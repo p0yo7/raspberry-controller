@@ -67,7 +67,7 @@ Group=$USER
 WorkingDirectory=$HOME/serve-and-ate-rust
 ExecStartPre=/bin/bash -c 'pkill -f "Xvfb :99" || true'
 ExecStartPre=/usr/bin/Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset &
-ExecStart=$HOME/serve-and-ate-rust/target/release/serve-and-ate-rust
+ExecStart=~/serve-and-ate-rust/target/release/serve-and-ate-rust
 Restart=always
 RestartSec=10
 Environment=DISPLAY=:99
