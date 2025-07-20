@@ -3,7 +3,7 @@ set -e
 
 echo "Actualizando repositorios e instalando dependencias..."
 sudo apt update
-sudo apt install -y build-essential pkg-config libx11-dev libxtst-dev libxinerama-dev libxrandr-dev libxi-dev libxcursor-dev avahi-daemon xvfb curl
+sudo apt install -y build-essential pkg-config libx11-dev libxtst-dev libxinerama-dev libxrandr-dev libxi-dev libxcursor-dev avahi-daemon xvfb curl libxss-dev
 
 echo "Instalando Rust..."
 if ! command -v rustc &> /dev/null; then
@@ -49,6 +49,9 @@ cp ./webapp/styles.css ~/serve-and-ate-rust/webapp/
 echo "Navegando al directorio del proyecto y compilando..."
 cd ~/serve-and-ate-rust
 source ~/.cargo/env
+
+# Limpiar cache de cargo y recompilar
+cargo clean
 cargo build --release
 
 echo "Creando servicio systemd..."
@@ -62,7 +65,8 @@ Type=simple
 User=$USER
 Group=$USER
 WorkingDirectory=$HOME/serve-and-ate-rust
-ExecStartPre=/usr/bin/Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset
+ExecStartPre=/bin/bash -c 'pkill -f "Xvfb :99" || true'
+ExecStartPre=/usr/bin/Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset &
 ExecStart=$HOME/serve-and-ate-rust/target/release/serve-and-ate-rust
 Restart=always
 RestartSec=10

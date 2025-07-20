@@ -6,7 +6,7 @@ use serde_json;
 use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use std::path::Path;
-use enigo::{Enigo, Mouse, Key, Keyboard, Settings, Direction};
+use enigo::{Enigo, MouseButton, MouseControllable, KeyboardControllable, Key};
 
 #[derive(Deserialize, Debug)]
 struct ClientMessage {
@@ -36,7 +36,7 @@ async fn handle_websocket(stream: TcpStream) {
     };
 
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
-    let mut enigo = Enigo::new(&Settings::default()).unwrap();
+    let mut enigo = Enigo::new();
 
     while let Some(msg) = ws_receiver.next().await {
         match msg {
@@ -85,48 +85,50 @@ async fn handle_message(enigo: &mut Enigo, data: ClientMessage) -> Result<(), Bo
         "mouse" => {
             let dx = data.dx.unwrap_or(0);
             let dy = data.dy.unwrap_or(0);
-            let _ = enigo.move_mouse(dx, dy, enigo::Coordinate::Rel);
+            enigo.mouse_move_relative(dx, dy);
         }
         "click" => {
             let button = data.button.unwrap_or_else(|| "left".to_string());
             let mouse_button = match button.as_str() {
-                "left" => enigo::Button::Left,
-                "right" => enigo::Button::Right,
-                "middle" => enigo::Button::Middle,
-                _ => enigo::Button::Left,
+                "left" => MouseButton::Left,
+                "right" => MouseButton::Right,
+                "middle" => MouseButton::Middle,
+                _ => MouseButton::Left,
             };
-            let _ = enigo.button(mouse_button, Direction::Click);
+            enigo.mouse_click(mouse_button);
         }
         "scroll" => {
             let dy = data.dy.unwrap_or(0);
-            let _ = enigo.scroll(dy, enigo::Axis::Vertical);
+            if dy > 0 {
+                enigo.mouse_scroll_y(1);
+            } else if dy < 0 {
+                enigo.mouse_scroll_y(-1);
+            }
         }
         "key" => {
             if let Some(key_str) = data.key {
-                let key_result = match key_str.as_str() {
-                    "space" => enigo.key(Key::Space, Direction::Click),
-                    "enter" => enigo.key(Key::Return, Direction::Click),
-                    "escape" => enigo.key(Key::Escape, Direction::Click),
-                    "tab" => enigo.key(Key::Tab, Direction::Click),
-                    "backspace" => enigo.key(Key::Backspace, Direction::Click),
-                    "delete" => enigo.key(Key::Delete, Direction::Click),
-                    "up" => enigo.key(Key::UpArrow, Direction::Click),
-                    "down" => enigo.key(Key::DownArrow, Direction::Click),
-                    "left" => enigo.key(Key::LeftArrow, Direction::Click),
-                    "right" => enigo.key(Key::RightArrow, Direction::Click),
-                    "ctrl" => enigo.key(Key::Control, Direction::Click),
-                    "alt" => enigo.key(Key::Alt, Direction::Click),
-                    "shift" => enigo.key(Key::Shift, Direction::Click),
+                match key_str.as_str() {
+                    "space" => enigo.key_click(Key::Space),
+                    "enter" => enigo.key_click(Key::Return),
+                    "escape" => enigo.key_click(Key::Escape),
+                    "tab" => enigo.key_click(Key::Tab),
+                    "backspace" => enigo.key_click(Key::Backspace),
+                    "delete" => enigo.key_click(Key::Delete),
+                    "up" => enigo.key_click(Key::UpArrow),
+                    "down" => enigo.key_click(Key::DownArrow),
+                    "left" => enigo.key_click(Key::LeftArrow),
+                    "right" => enigo.key_click(Key::RightArrow),
+                    "ctrl" => enigo.key_click(Key::Control),
+                    "alt" => enigo.key_click(Key::Alt),
+                    "shift" => enigo.key_click(Key::Shift),
                     // Para letras individuales
                     s if s.len() == 1 => {
-                        enigo.text(s)
+                        enigo.key_sequence(s);
                     }
                     _ => {
                         println!("Tecla no reconocida: {}", key_str);
-                        Ok(())
                     }
                 };
-                let _ = key_result;
             }
         }
         _ => {
@@ -137,7 +139,7 @@ async fn handle_message(enigo: &mut Enigo, data: ClientMessage) -> Result<(), Bo
 }
 
 async fn serve_static_file(path: &str) -> Result<(Vec<u8>, &'static str), std::io::Error> {
-    let webapp_dir = "/home/pi/serve-and-ate/webapp";
+    let webapp_dir = "/home/pi/serve-and-ate-rust/webapp";
     let full_path = if path == "/" {
         format!("{}/index.html", webapp_dir)
     } else {
