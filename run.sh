@@ -3,14 +3,22 @@ set -e
 
 echo "Actualizando repositorios e instalando dependencias..."
 sudo apt update
-sudo apt install -y python3-pip python3-dev build-essential avahi-daemon
+sudo apt install -y python3-pip python3-dev build-essential python3-venv avahi-daemon xvfb
 
-echo "Instalando paquetes Python necesarios..."
-pip3 install --upgrade --break-system-packages pip
-pip3 install --break-system-packages websockets pyautogui rpi.gpio
+# Ruta del proyecto
+APP_DIR="$HOME/serve-and-ate"
+VENV_DIR="$APP_DIR/venv"
 
-echo "Instalando Xvfb para display virtual..."
-sudo apt install -y xvfb
+echo "Creando estructura de carpetas..."
+mkdir -p "$APP_DIR/webapp"
+mkdir -p "$APP_DIR/scripts"
+
+echo "Creando entorno virtual en $VENV_DIR..."
+python3 -m venv "$VENV_DIR"
+
+echo "Activando entorno virtual e instalando paquetes Python necesarios..."
+"$VENV_DIR/bin/pip" install --upgrade pip
+"$VENV_DIR/bin/pip" install websockets pyautogui rpi.gpio
 
 echo "Habilitando y arrancando servicio mDNS (Avahi)..."
 sudo systemctl enable avahi-daemon
@@ -34,35 +42,32 @@ EOF
 echo "Reiniciando servicio Avahi para aplicar configuración..."
 sudo systemctl restart avahi-daemon
 
-echo "Creando estructura de carpetas..."
-mkdir -p ~/serve-and-ate/webapp
-mkdir -p ~/serve-and-ate/scripts
-
-echo "Copiando archivos al directorio ~/serve-and-ate/ ..."
-cp server.py ~/serve-and-ate/
-cp ./webapp/index.html ~/serve-and-ate/webapp/
-cp ./webapp/script.js ~/serve-and-ate/webapp/
-cp ./webapp/styles.css ~/serve-and-ate/webapp/
+echo "Copiando archivos al directorio $APP_DIR ..."
+cp server.py "$APP_DIR/"
+cp ./webapp/index.html "$APP_DIR/webapp/"
+cp ./webapp/script.js "$APP_DIR/webapp/"
+cp ./webapp/styles.css "$APP_DIR/webapp/"
 
 echo "Asignando permisos de ejecución a server.py..."
-chmod +x ~/serve-and-ate/server.py
+chmod +x "$APP_DIR/server.py"
 
 echo "Creando servicio systemd..."
+
 cat << EOF | sudo tee /etc/systemd/system/serve-and-ate.service
 [Unit]
 Description=Serve and Ate Raspberry Pi Remote Control Server
 After=network.target
 [Service]
 Type=simple
-User=p0yo7
-Group=p0yo7
-WorkingDirectory=$HOME/serve-and-ate
+User=$USER
+Group=$USER
+WorkingDirectory=$APP_DIR
 ExecStartPre=/usr/bin/Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset
-ExecStart=/usr/bin/python3 $HOME/serve-and-ate/server.py
+ExecStart=$VENV_DIR/bin/python $APP_DIR/server.py
 Restart=always
 RestartSec=10
 Environment=DISPLAY=:99
-Environment=PYTHONPATH=$HOME/serve-and-ate
+Environment=PYTHONPATH=$APP_DIR
 [Install]
 WantedBy=multi-user.target
 EOF
@@ -73,9 +78,7 @@ sudo systemctl enable serve-and-ate.service
 sudo systemctl start serve-and-ate.service
 
 echo "Instalación y configuración completa!"
-
 echo "Accede a http://serve-and-ate.local:8080 desde tu celular para controlar tu Raspberry Pi."
-# Mostrar estado del servicio
 
 echo "Estado del servicio:"
 sudo systemctl status serve-and-ate.service --no-pager
