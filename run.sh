@@ -3,7 +3,7 @@ set -e
 
 echo "Actualizando repositorios e instalando dependencias..."
 sudo apt update
-sudo apt install -y build-essential pkg-config libx11-dev libxtst-dev libevdev-dev avahi-daemon xvfb curl
+sudo apt install -y build-essential pkg-config libx11-dev libxtst-dev libxinerama-dev libxrandr-dev libxi-dev libxcursor-dev avahi-daemon xvfb curl
 
 echo "Instalando Rust..."
 if ! command -v rustc &> /dev/null; then
