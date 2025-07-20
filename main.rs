@@ -3,12 +3,10 @@ use tokio_tungstenite::{accept_async, tungstenite::Message};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::sync::Arc;
 use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use std::path::Path;
-use enigo::{Enigo, Mouse, Key, Keyboard, Direction};
-use std::collections::HashMap;
+use enigo::{Enigo, MouseControllable, KeyboardControllable};
 
 #[derive(Deserialize, Debug)]
 struct ClientMessage {
@@ -87,49 +85,55 @@ async fn handle_message(enigo: &mut Enigo, data: ClientMessage) -> Result<(), Bo
         "mouse" => {
             let dx = data.dx.unwrap_or(0);
             let dy = data.dy.unwrap_or(0);
-            enigo.move_mouse(dx, dy, enigo::Coordinate::Rel)?;
+            enigo.mouse_move_relative(dx, dy);
         }
         "click" => {
             let button = data.button.unwrap_or_else(|| "left".to_string());
-            let mouse_button = match button.as_str() {
-                "left" => enigo::Button::Left,
-                "right" => enigo::Button::Right,
-                "middle" => enigo::Button::Middle,
-                _ => enigo::Button::Left,
-            };
-            enigo.button(mouse_button, Direction::Click)?;
+            match button.as_str() {
+                "left" => enigo.mouse_click(enigo::MouseButton::Left),
+                "right" => enigo.mouse_click(enigo::MouseButton::Right),
+                "middle" => enigo.mouse_click(enigo::MouseButton::Middle),
+                _ => enigo.mouse_click(enigo::MouseButton::Left),
+            }
         }
         "scroll" => {
             let dy = data.dy.unwrap_or(0);
-            enigo.scroll(dy, enigo::Axis::Vertical)?;
+            if dy > 0 {
+                for _ in 0..dy {
+                    enigo.mouse_scroll_y(1);
+                }
+            } else {
+                for _ in 0..(-dy) {
+                    enigo.mouse_scroll_y(-1);
+                }
+            }
         }
         "key" => {
             if let Some(key_str) = data.key {
-                let key = match key_str.as_str() {
-                    "space" => Key::Space,
-                    "enter" => Key::Return,
-                    "escape" => Key::Escape,
-                    "tab" => Key::Tab,
-                    "backspace" => Key::Backspace,
-                    "delete" => Key::Delete,
-                    "up" => Key::UpArrow,
-                    "down" => Key::DownArrow,
-                    "left" => Key::LeftArrow,
-                    "right" => Key::RightArrow,
-                    "ctrl" => Key::Control,
-                    "alt" => Key::Alt,
-                    "shift" => Key::Shift,
+                match key_str.as_str() {
+                    "space" => enigo.key_click(enigo::Key::Space),
+                    "enter" => enigo.key_click(enigo::Key::Return),
+                    "escape" => enigo.key_click(enigo::Key::Escape),
+                    "tab" => enigo.key_click(enigo::Key::Tab),
+                    "backspace" => enigo.key_click(enigo::Key::Backspace),
+                    "delete" => enigo.key_click(enigo::Key::Delete),
+                    "up" => enigo.key_click(enigo::Key::UpArrow),
+                    "down" => enigo.key_click(enigo::Key::DownArrow),
+                    "left" => enigo.key_click(enigo::Key::LeftArrow),
+                    "right" => enigo.key_click(enigo::Key::RightArrow),
+                    "ctrl" => enigo.key_click(enigo::Key::Control),
+                    "alt" => enigo.key_click(enigo::Key::Alt),
+                    "shift" => enigo.key_click(enigo::Key::Shift),
                     // Para letras individuales
                     s if s.len() == 1 => {
                         let ch = s.chars().next().unwrap();
-                        Key::Layout(ch)
+                        enigo.key_sequence(&ch.to_string());
                     }
                     _ => {
                         println!("Tecla no reconocida: {}", key_str);
                         return Ok(());
                     }
-                };
-                enigo.key(key, Direction::Click)?;
+                }
             }
         }
         _ => {
