@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::process::Command;
 use std::path::Path;
-use enigo::{Enigo, MouseButton, MouseControllable, KeyboardControllable, Key};
 
 #[derive(Deserialize, Debug)]
 struct ClientMessage {
@@ -36,13 +36,12 @@ async fn handle_websocket(stream: TcpStream) {
     };
 
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
-    let mut enigo = Enigo::new();
 
     while let Some(msg) = ws_receiver.next().await {
         match msg {
             Ok(Message::Text(text)) => {
                 if let Ok(data) = serde_json::from_str::<ClientMessage>(&text) {
-                    match handle_message(&mut enigo, data).await {
+                    match handle_message(data).await {
                         Ok(_) => {
                             let response = ServerResponse {
                                 status: "ok".to_string(),
@@ -80,55 +79,73 @@ async fn handle_websocket(stream: TcpStream) {
     }
 }
 
-async fn handle_message(enigo: &mut Enigo, data: ClientMessage) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn execute_command(cmd: &str, args: Vec<&str>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let output = Command::new(cmd)
+        .args(args)
+        .env("DISPLAY", ":99")
+        .output()
+        .await?;
+    
+    if !output.status.success() {
+        let error_msg = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Command failed: {}", error_msg).into());
+    }
+    
+    Ok(())
+}
+
+async fn handle_message(data: ClientMessage) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     match data.msg_type.as_str() {
         "mouse" => {
             let dx = data.dx.unwrap_or(0);
             let dy = data.dy.unwrap_or(0);
-            enigo.mouse_move_relative(dx, dy);
+            execute_command("xdotool", vec!["mousemove_relative", "--", &dx.to_string(), &dy.to_string()]).await?;
         }
         "click" => {
             let button = data.button.unwrap_or_else(|| "left".to_string());
-            let mouse_button = match button.as_str() {
-                "left" => MouseButton::Left,
-                "right" => MouseButton::Right,
-                "middle" => MouseButton::Middle,
-                _ => MouseButton::Left,
+            let button_num = match button.as_str() {
+                "left" => "1",
+                "middle" => "2",
+                "right" => "3",
+                _ => "1",
             };
-            enigo.mouse_click(mouse_button);
+            execute_command("xdotool", vec!["click", button_num]).await?;
         }
         "scroll" => {
             let dy = data.dy.unwrap_or(0);
             if dy > 0 {
-                enigo.mouse_scroll_y(1);
+                execute_command("xdotool", vec!["click", "4"]).await?; // scroll up
             } else if dy < 0 {
-                enigo.mouse_scroll_y(-1);
+                execute_command("xdotool", vec!["click", "5"]).await?; // scroll down
             }
         }
         "key" => {
             if let Some(key_str) = data.key {
-                match key_str.as_str() {
-                    "space" => enigo.key_click(Key::Space),
-                    "enter" => enigo.key_click(Key::Return),
-                    "escape" => enigo.key_click(Key::Escape),
-                    "tab" => enigo.key_click(Key::Tab),
-                    "backspace" => enigo.key_click(Key::Backspace),
-                    "delete" => enigo.key_click(Key::Delete),
-                    "up" => enigo.key_click(Key::UpArrow),
-                    "down" => enigo.key_click(Key::DownArrow),
-                    "left" => enigo.key_click(Key::LeftArrow),
-                    "right" => enigo.key_click(Key::RightArrow),
-                    "ctrl" => enigo.key_click(Key::Control),
-                    "alt" => enigo.key_click(Key::Alt),
-                    "shift" => enigo.key_click(Key::Shift),
+                let xdotool_key = match key_str.as_str() {
+                    "space" => "space",
+                    "enter" => "Return",
+                    "escape" => "Escape",
+                    "tab" => "Tab",
+                    "backspace" => "BackSpace",
+                    "delete" => "Delete",
+                    "up" => "Up",
+                    "down" => "Down",
+                    "left" => "Left",
+                    "right" => "Right",
+                    "ctrl" => "ctrl",
+                    "alt" => "alt",
+                    "shift" => "shift",
                     // Para letras individuales
                     s if s.len() == 1 => {
-                        enigo.key_sequence(s);
+                        execute_command("xdotool", vec!["type", s]).await?;
+                        return Ok(());
                     }
                     _ => {
                         println!("Tecla no reconocida: {}", key_str);
+                        return Ok(());
                     }
                 };
+                execute_command("xdotool", vec!["key", xdotool_key]).await?;
             }
         }
         _ => {
@@ -206,6 +223,17 @@ async fn handle_http(mut stream: TcpStream) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Verificar que xdotool esté instalado
+    match Command::new("which").arg("xdotool").output().await {
+        Ok(output) if output.status.success() => {
+            println!("xdotool encontrado");
+        }
+        _ => {
+            eprintln!("Error: xdotool no está instalado. Ejecuta: sudo apt install xdotool");
+            return Ok(());
+        }
+    }
+    
     // Servidor HTTP para archivos estáticos
     let http_listener = TcpListener::bind("0.0.0.0:8080").await?;
     println!("Servidor HTTP iniciado en puerto 8080");
